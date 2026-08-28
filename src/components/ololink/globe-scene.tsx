@@ -992,139 +992,283 @@ const KIND_COLOR: Record<Asset['kind'], string> = {
   customer: '#e2e8f0',
 };
 
+/* Shared aerospace-grade material palette — lightweight, physically believable. */
+const HULL = { color: '#d7dee6', metalness: 0.55, roughness: 0.42 } as const;
+const DARK_HULL = { color: '#8b95a2', metalness: 0.6, roughness: 0.5 } as const;
+const SOLAR = { color: '#16305e', metalness: 0.35, roughness: 0.28 } as const;
+const GOLD_FOIL = { color: '#c8a24a', metalness: 0.85, roughness: 0.35 } as const;
+const CONCRETE = { color: '#7b8590', metalness: 0.05, roughness: 0.95 } as const;
+
+/**
+ * LEO communications satellite — rectangular bus, two deployed solar wings,
+ * nadir-pointing high-gain dish and a pair of comm antennas.
+ * Nadir is -Y (the node frame is stood up on the sphere surface).
+ */
 function Satellite({ s, color }: { s: number; color: string }) {
   const ref = useRef<THREE.Group>(null);
-  useFrame((_, d) => {
-    if (ref.current) ref.current.rotation.y += d * 0.5;
+  useFrame(({ clock }) => {
+    // slow yaw about the nadir axis — attitude control, not a spin
+    if (ref.current) ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.12) * 0.35;
   });
   return (
     <group ref={ref}>
-      <mesh>
-        <boxGeometry args={[s * 0.9, s * 0.7, s * 0.7]} />
-        <meshBasicMaterial color={color} />
+      {/* spacecraft bus */}
+      <mesh castShadow>
+        <boxGeometry args={[s * 0.62, s * 0.78, s * 0.62]} />
+        <meshStandardMaterial {...HULL} />
       </mesh>
+      {/* MLI blanket band */}
+      <mesh position={[0, s * 0.12, 0]}>
+        <boxGeometry args={[s * 0.65, s * 0.22, s * 0.65]} />
+        <meshStandardMaterial {...GOLD_FOIL} />
+      </mesh>
+
+      {/* solar wings: yoke + two panel sections per side */}
       {[-1, 1].map((dir) => (
-        <mesh key={dir} position={[dir * s * 1.35, 0, 0]}>
-          <boxGeometry args={[s * 1.6, s * 0.06, s * 0.8]} />
-          <meshBasicMaterial color="#1e3a8a" />
+        <group key={dir}>
+          <mesh position={[dir * s * 0.42, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[s * 0.035, s * 0.035, s * 0.25, 6]} />
+            <meshStandardMaterial {...DARK_HULL} />
+          </mesh>
+          {[0.95, 1.85].map((off) => (
+            <mesh key={off} position={[dir * s * off, 0, 0]}>
+              <boxGeometry args={[s * 0.82, s * 0.02, s * 0.5]} />
+              <meshStandardMaterial {...SOLAR} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* nadir high-gain dish */}
+      <group position={[0, -s * 0.46, 0]} rotation={[Math.PI, 0, 0]}>
+        <mesh>
+          <sphereGeometry args={[s * 0.3, 16, 8, 0, Math.PI * 2, 0, 0.72]} />
+          <meshStandardMaterial color={color} metalness={0.5} roughness={0.35} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[0, s * 0.18, 0]}>
+          <cylinderGeometry args={[s * 0.03, s * 0.05, s * 0.16, 6]} />
+          <meshStandardMaterial {...HULL} />
+        </mesh>
+      </group>
+
+      {/* comm antennas / boom */}
+      {[-1, 1].map((dir) => (
+        <mesh key={dir} position={[0, -s * 0.18, dir * s * 0.36]} rotation={[dir * 0.5, 0, 0]}>
+          <cylinderGeometry args={[s * 0.012, s * 0.012, s * 0.42, 4]} />
+          <meshStandardMaterial {...DARK_HULL} />
         </mesh>
       ))}
-      {/* downlink aperture */}
-      <mesh position={[0, -s * 0.55, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[s * 0.35, s * 0.4, 10, 1, true]} />
-        <meshBasicMaterial color={color} side={THREE.DoubleSide} transparent opacity={0.8} />
-      </mesh>
     </group>
   );
 }
 
+/** Slowly turning propeller disc used by both aircraft. */
+function Prop({ r, speed, thick }: { r: number; speed: number; thick: number }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((_, d) => {
+    if (ref.current) ref.current.rotation.z += d * speed;
+  });
+  return (
+    <group ref={ref}>
+      {[0, Math.PI / 2].map((a) => (
+        <mesh key={a} rotation={[0, 0, a]}>
+          <boxGeometry args={[r * 2, thick, thick * 0.6]} />
+          <meshStandardMaterial color="#aab4c0" metalness={0.4} roughness={0.6} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * HAPS — solar-electric stratospheric fixed-wing platform (~18–20 km).
+ * Extreme-aspect-ratio single wing, slender fuselage pod, T-tail, prop array.
+ */
 function Haps({ s, color }: { s: number; color: string }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.25) * 0.5;
-      ref.current.position.y = Math.sin(clock.elapsedTime * 0.7) * s * 0.15;
-    }
+    const t = clock.elapsedTime;
+    if (!ref.current) return;
+    // wide, slow station-keeping orbit with a gentle bank
+    ref.current.rotation.y = t * 0.16;
+    ref.current.rotation.z = 0.12;
+    ref.current.position.y = Math.sin(t * 0.35) * s * 0.08;
+  });
+  const span = s * 3.4;
+  return (
+    <group ref={ref}>
+      {/* high-aspect-ratio wing with solar-cell upper surface */}
+      <mesh>
+        <boxGeometry args={[span, s * 0.035, s * 0.34]} />
+        <meshStandardMaterial color="#e7edf3" metalness={0.2} roughness={0.55} />
+      </mesh>
+      <mesh position={[0, s * 0.026, 0]}>
+        <boxGeometry args={[span * 0.97, s * 0.008, s * 0.28]} />
+        <meshStandardMaterial {...SOLAR} />
+      </mesh>
+      {/* slender fuselage pod */}
+      <mesh position={[0, -s * 0.07, s * 0.06]} rotation={[Math.PI / 2, 0, 0]}>
+        <capsuleGeometry args={[s * 0.07, s * 0.72, 3, 8]} />
+        <meshStandardMaterial {...HULL} />
+      </mesh>
+      {/* tail boom + T-tail */}
+      <mesh position={[0, -s * 0.05, -s * 0.62]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[s * 0.022, s * 0.022, s * 0.8, 6]} />
+        <meshStandardMaterial {...DARK_HULL} />
+      </mesh>
+      <mesh position={[0, s * 0.14, -s * 1]}>
+        <boxGeometry args={[s * 0.03, s * 0.28, s * 0.16]} />
+        <meshStandardMaterial {...HULL} />
+      </mesh>
+      <mesh position={[0, s * 0.27, -s * 1]}>
+        <boxGeometry args={[s * 0.8, s * 0.02, s * 0.16]} />
+        <meshStandardMaterial {...HULL} />
+      </mesh>
+      {/* distributed electric propulsion */}
+      {[-1.25, -0.55, 0.55, 1.25].map((x) => (
+        <group key={x} position={[s * x, -s * 0.01, s * 0.24]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[s * 0.035, s * 0.035, s * 0.14, 6]} />
+            <meshStandardMaterial {...DARK_HULL} />
+          </mesh>
+          <group position={[0, 0, s * 0.09]}>
+            <Prop r={s * 0.17} speed={12} thick={s * 0.018} />
+          </group>
+        </group>
+      ))}
+      {/* belly comms payload */}
+      <mesh position={[0, -s * 0.16, s * 0.06]}>
+        <sphereGeometry args={[s * 0.075, 10, 8]} />
+        <meshStandardMaterial color={color} metalness={0.4} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * Relay UAV — compact low-altitude fixed-wing aircraft: short stubby wings,
+ * pusher prop, V-tail. Deliberately distinct from the HAPS glider.
+ */
+function Drone({ s, color }: { s: number; color: string }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    if (!ref.current) return;
+    ref.current.rotation.y = t * 0.55; // tight loiter orbit
+    ref.current.rotation.z = 0.28; // banked into the turn
   });
   return (
     <group ref={ref}>
-      {/* stratospheric wing */}
-      <mesh scale={[3.1, 0.3, 0.85]}>
-        <sphereGeometry args={[s * 0.62, 16, 12]} />
-        <meshBasicMaterial color={color} />
-      </mesh>
-      {/* twin gondolas */}
-      {[-1, 1].map((dir) => (
-        <mesh key={dir} position={[dir * s * 0.8, -s * 0.32, 0]}>
-          <capsuleGeometry args={[s * 0.11, s * 0.34, 4, 8]} />
-          <meshBasicMaterial color="#bae6fd" />
-        </mesh>
-      ))}
-      {/* tail fin */}
-      <mesh position={[0, s * 0.2, -s * 0.5]}>
-        <boxGeometry args={[s * 0.06, s * 0.42, s * 0.3]} />
-        <meshBasicMaterial color="#bae6fd" />
-      </mesh>
-      {/* station-keeping footprint */}
+      {/* fuselage */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[s * 1.5, s * 0.02, 6, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.35} />
+        <capsuleGeometry args={[s * 0.14, s * 0.72, 4, 10]} />
+        <meshStandardMaterial color="#c3ccd6" metalness={0.45} roughness={0.5} />
       </mesh>
-    </group>
-  );
-}
-
-function Drone({ s, color }: { s: number; color: string }) {
-  const rotors = useRef<THREE.Group>(null);
-  useFrame((_, d) => {
-    if (rotors.current) rotors.current.rotation.y += d * 6;
-  });
-  const arms: [number, number][] = [
-    [1, 1],
-    [1, -1],
-    [-1, 1],
-    [-1, -1],
-  ];
-  return (
-    <group>
-      <mesh>
-        <boxGeometry args={[s * 0.55, s * 0.28, s * 0.55]} />
-        <meshBasicMaterial color={color} />
+      {/* nose sensor turret */}
+      <mesh position={[0, -s * 0.1, s * 0.42]}>
+        <sphereGeometry args={[s * 0.1, 10, 8]} />
+        <meshStandardMaterial color="#3b4652" metalness={0.5} roughness={0.35} />
       </mesh>
-      {[0, Math.PI / 2].map((r) => (
-        <mesh key={r} rotation={[0, r, 0]}>
-          <boxGeometry args={[s * 2, s * 0.05, s * 0.07]} />
-          <meshBasicMaterial color="#c7d2fe" />
+      {/* short straight wings */}
+      <mesh position={[0, s * 0.05, s * 0.02]}>
+        <boxGeometry args={[s * 1.7, s * 0.035, s * 0.26]} />
+        <meshStandardMaterial color="#e7edf3" metalness={0.25} roughness={0.55} />
+      </mesh>
+      {/* winglets */}
+      {[-1, 1].map((dir) => (
+        <mesh key={dir} position={[dir * s * 0.84, s * 0.12, s * 0.02]}>
+          <boxGeometry args={[s * 0.025, s * 0.16, s * 0.2]} />
+          <meshStandardMaterial {...HULL} />
         </mesh>
       ))}
-      <group ref={rotors}>
-        {arms.map(([x, z]) => (
-          <mesh
-            key={`${x}${z}`}
-            position={[x * s * 0.72, s * 0.06, z * s * 0.72]}
-            rotation={[Math.PI / 2, 0, 0]}
-          >
-            <torusGeometry args={[s * 0.34, s * 0.02, 5, 16]} />
-            <meshBasicMaterial color="#e0e7ff" transparent opacity={0.85} />
+      {/* V-tail */}
+      {[-1, 1].map((dir) => (
+        <mesh key={dir} position={[dir * s * 0.16, s * 0.12, -s * 0.44]} rotation={[0, 0, dir * 0.7]}>
+          <boxGeometry args={[s * 0.04, s * 0.34, s * 0.18]} />
+          <meshStandardMaterial {...HULL} />
+        </mesh>
+      ))}
+      {/* pusher prop */}
+      <group position={[0, 0, -s * 0.56]}>
+        <Prop r={s * 0.22} speed={26} thick={s * 0.022} />
+      </group>
+      {/* belly relay antenna */}
+      <mesh position={[0, -s * 0.18, -s * 0.05]}>
+        <cylinderGeometry args={[s * 0.07, s * 0.09, s * 0.1, 8]} />
+        <meshStandardMaterial color={color} metalness={0.4} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * Ground station — concrete pad, equipment shelter and a steerable parabolic
+ * dish on an elevation/azimuth pedestal, tracking the active link.
+ */
+function GroundStation({ s, color }: { s: number; color: string }) {
+  const az = useRef<THREE.Group>(null);
+  const el = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    // slow az/el tracking sweep toward the overhead link
+    if (az.current) az.current.rotation.y = Math.sin(t * 0.16) * 0.9;
+    if (el.current) el.current.rotation.x = -0.95 + Math.sin(t * 0.11) * 0.18;
+  });
+  return (
+    <group>
+      {/* concrete pad */}
+      <mesh position={[0, s * 0.03, 0]} receiveShadow>
+        <cylinderGeometry args={[s * 0.95, s * 1, s * 0.06, 16]} />
+        <meshStandardMaterial {...CONCRETE} />
+      </mesh>
+      {/* equipment shelter + mast */}
+      <mesh position={[s * 0.6, s * 0.16, s * 0.25]} castShadow>
+        <boxGeometry args={[s * 0.34, s * 0.2, s * 0.26]} />
+        <meshStandardMaterial color="#9aa5b1" metalness={0.3} roughness={0.7} />
+      </mesh>
+      <mesh position={[-s * 0.62, s * 0.3, -s * 0.2]}>
+        <cylinderGeometry args={[s * 0.015, s * 0.015, s * 0.55, 5]} />
+        <meshStandardMaterial {...DARK_HULL} />
+      </mesh>
+
+      {/* az/el pedestal */}
+      <group ref={az} position={[0, s * 0.06, 0]}>
+        <mesh position={[0, s * 0.16, 0]} castShadow>
+          <cylinderGeometry args={[s * 0.11, s * 0.16, s * 0.32, 10]} />
+          <meshStandardMaterial {...HULL} />
+        </mesh>
+        <group ref={el} position={[0, s * 0.36, 0]}>
+          {/* parabolic reflector */}
+          <mesh castShadow>
+            <sphereGeometry args={[s * 0.5, 20, 10, 0, Math.PI * 2, 0, 0.78]} />
+            <meshStandardMaterial
+              color="#eef3f8"
+              metalness={0.35}
+              roughness={0.3}
+              side={THREE.DoubleSide}
+            />
           </mesh>
-        ))}
+          {/* feed support struts + feed horn */}
+          {[0, 2.1, 4.2].map((a) => (
+            <mesh
+              key={a}
+              position={[Math.cos(a) * s * 0.2, s * 0.24, Math.sin(a) * s * 0.2]}
+              rotation={[0, 0, Math.cos(a) * 0.35]}
+            >
+              <cylinderGeometry args={[s * 0.012, s * 0.012, s * 0.42, 4]} />
+              <meshStandardMaterial {...DARK_HULL} />
+            </mesh>
+          ))}
+          <mesh position={[0, s * 0.44, 0]}>
+            <cylinderGeometry args={[s * 0.05, s * 0.07, s * 0.12, 8]} />
+            <meshStandardMaterial color={color} metalness={0.5} roughness={0.35} />
+          </mesh>
+        </group>
       </group>
     </group>
   );
 }
 
-function GroundStation({ s, color }: { s: number; color: string }) {
-  const dish = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (dish.current) dish.current.rotation.y = Math.sin(clock.elapsedTime * 0.2) * 0.7;
-  });
-  return (
-    <group>
-      {/* pad */}
-      <mesh position={[0, s * 0.05, 0]}>
-        <cylinderGeometry args={[s * 0.95, s * 1.05, s * 0.12, 12]} />
-        <meshBasicMaterial color="#0f766e" />
-      </mesh>
-      <group ref={dish} position={[0, s * 0.4, 0]}>
-        {/* mast */}
-        <mesh position={[0, -s * 0.18, 0]}>
-          <cylinderGeometry args={[s * 0.09, s * 0.11, s * 0.5, 8]} />
-          <meshBasicMaterial color="#5eead4" />
-        </mesh>
-        {/* parabolic dish, tilted skyward */}
-        <mesh rotation={[-0.75, 0, 0]}>
-          <coneGeometry args={[s * 0.85, s * 0.6, 18, 1, true]} />
-          <meshBasicMaterial color={color} side={THREE.DoubleSide} />
-        </mesh>
-        {/* feed horn */}
-        <mesh position={[0, s * 0.36, s * 0.3]}>
-          <sphereGeometry args={[s * 0.1, 8, 8]} />
-          <meshBasicMaterial color="#ecfeff" />
-        </mesh>
-      </group>
-    </group>
-  );
-}
 
 function CustomerNode({ s, color }: { s: number; color: string }) {
   const ring = useRef<THREE.Mesh>(null);

@@ -55,43 +55,84 @@ const KIND_SIZE: Record<AssetKind, number> = {
   customer: 4.5,
 };
 
+/**
+ * 2D operational glyphs — simplified but physically believable silhouettes that
+ * mirror the 3D models: LEO bus + solar wings, HAPS glider planform, swept-wing
+ * relay UAV, and a parabolic ground terminal.
+ */
 function NodeGlyph({ kind, color }: { kind: AssetKind; color: string }) {
-  const r = KIND_SIZE[kind];
+  const s = KIND_SIZE[kind] / 4; // design units are drawn on a ~16px canvas
+
   if (kind === 'satellite') {
+    // nadir-pointing bus, twin solar wings, high-gain dish
     return (
-      <g>
-        <rect x={-r * 0.5} y={-r * 0.5} width={r} height={r} fill={color} />
-        <rect x={-r * 1.7} y={-r * 0.28} width={r * 0.9} height={r * 0.56} fill={color} fillOpacity={0.55} />
-        <rect x={r * 0.8} y={-r * 0.28} width={r * 0.9} height={r * 0.56} fill={color} fillOpacity={0.55} />
+      <g transform={`scale(${s})`}>
+        <g stroke={color} strokeWidth={0.5} strokeOpacity={0.85}>
+          <rect x={-6.4} y={-1.7} width={4.2} height={3.4} fill={color} fillOpacity={0.28} />
+          <path d={`M -5.4 -1.7 V 1.7 M -4.3 -1.7 V 1.7 M -3.2 -1.7 V 1.7`} strokeOpacity={0.5} />
+          <rect x={2.2} y={-1.7} width={4.2} height={3.4} fill={color} fillOpacity={0.28} />
+          <path d={`M 3.2 -1.7 V 1.7 M 4.3 -1.7 V 1.7 M 5.4 -1.7 V 1.7`} strokeOpacity={0.5} />
+          <path d="M -2.2 0 H -1.4 M 2.2 0 H 1.4" />
+        </g>
+        <rect x={-1.4} y={-1.9} width={2.8} height={3.8} rx={0.3} fill={color} />
+        <path d="M -1.1 1.9 A 1.6 1.6 0 0 0 1.1 1.9 Z" fill={color} fillOpacity={0.75} />
+        <path d="M 0 -1.9 V -3.4" stroke={color} strokeWidth={0.5} />
       </g>
     );
   }
+
   if (kind === 'haps') {
-    return <ellipse rx={r * 1.5} ry={r * 0.62} fill={color} fillOpacity={0.75} stroke={color} strokeWidth={0.6} />;
+    // very high aspect-ratio solar glider planform with distributed props
+    return (
+      <g transform={`scale(${s})`}>
+        <g stroke={color} strokeWidth={0.5} fill="none" strokeOpacity={0.8}>
+          <path d="M -3.6 -0.9 h 0.9 M -1.4 -0.9 h 0.9 M 0.5 -0.9 h 0.9 M 2.7 -0.9 h 0.9" />
+        </g>
+        <rect x={-7} y={-0.55} width={14} height={1.05} rx={0.5} fill={color} fillOpacity={0.85} />
+        <rect x={-0.55} y={-0.4} width={1.1} height={4.4} rx={0.4} fill={color} />
+        <rect x={-2} y={3.4} width={4} height={0.8} rx={0.35} fill={color} fillOpacity={0.8} />
+      </g>
+    );
   }
+
   if (kind === 'drone') {
+    // compact swept-wing relay UAV with winglets and V-tail
     return (
-      <g stroke={color} strokeWidth={0.9} fill="none">
-        <path d={`M ${-r} ${-r} L ${r} ${r} M ${r} ${-r} L ${-r} ${r}`} strokeOpacity={0.7} />
-        <rect x={-r * 0.42} y={-r * 0.42} width={r * 0.84} height={r * 0.84} fill={color} />
+      <g transform={`scale(${s})`}>
+        <path
+          d="M 0 -4.2 L 0.75 0.2 L 5 2.4 L 5 3.3 L 0.75 2.3 L 0.5 4.2 L -0.5 4.2 L -0.75 2.3 L -5 3.3 L -5 2.4 L -0.75 0.2 Z"
+          fill={color}
+          fillOpacity={0.9}
+        />
+        <path d="M -5 2.4 v 1.6 M 5 2.4 v 1.6" stroke={color} strokeWidth={0.6} />
+        <path d="M -0.5 4.2 L -2.1 5.4 M 0.5 4.2 L 2.1 5.4" stroke={color} strokeWidth={0.6} />
       </g>
     );
   }
+
   if (kind === 'ground') {
+    // parabolic dish on az/el pedestal over a pad
     return (
-      <g>
-        <circle r={r * 0.62} fill={color} />
-        <circle r={r * 1.35} fill="none" stroke={color} strokeWidth={0.7} strokeOpacity={0.55} />
+      <g transform={`scale(${s})`}>
+        <path d="M -4.4 -3.4 A 4.4 4.4 0 0 1 1.6 -0.6 L -3 1 Z" fill={color} fillOpacity={0.55} stroke={color} strokeWidth={0.5} />
+        <path d="M -1.6 -1.3 L 0.9 -3.2" stroke={color} strokeWidth={0.5} />
+        <circle cx={0.9} cy={-3.2} r={0.5} fill={color} />
+        <path d="M -2.4 0.6 L -1.2 3.4" stroke={color} strokeWidth={0.8} />
+        <rect x={-4.4} y={3.4} width={8.8} height={0.9} rx={0.35} fill={color} fillOpacity={0.8} />
+        <rect x={1.4} y={1.6} width={2.6} height={1.8} fill={color} fillOpacity={0.45} stroke={color} strokeWidth={0.4} />
       </g>
     );
   }
+
   return (
-    <g>
-      <rect x={-r * 0.75} y={-r * 0.75} width={r * 1.5} height={r * 1.5} fill="none" stroke={color} strokeWidth={1} />
-      <circle r={r * 0.3} fill={color} />
+    <g transform={`scale(${s})`}>
+      <rect x={-2.6} y={-2.6} width={5.2} height={5.2} fill="none" stroke={color} strokeWidth={0.8} />
+      <circle r={1.1} fill={color} />
+      <path d="M 0 -2.6 V -4 M 0 2.6 V 4 M -2.6 0 H -4 M 2.6 0 H 4" stroke={color} strokeWidth={0.6} strokeOpacity={0.7} />
     </g>
   );
 }
+
 
 /**
  * 2D operational map — the same mission state as the globe, projected
